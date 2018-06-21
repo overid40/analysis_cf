@@ -1,8 +1,11 @@
 import urllib
 from itertools import count
+from datetime import datetime
 import pandas as pd
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as et
+import time
+from selenium import webdriver
 import collection.crawler as cw
 from collection.data_dict import sido_dict, gungu_dict
 
@@ -105,6 +108,57 @@ def crawling_kyochon():
         table.to_csv('{0}/kyochon_table.csv'.format(RESULT_DIRECTORY), encoding='utf-8', mode='w', index=True)
 
 
+def crawling_goobne():
+    url = 'http://www.goobne.co.kr/store/search_store.jsp'
+
+    # 첫 페이지 로딩
+    wd = webdriver.Chrome('D:/bigdata/chromedriver/chromedriver.exe')
+    wd.get(url)
+    time.sleep(5)
+
+    results = []
+    for page in count(start=1):
+        # 자바스크립트 실행
+        script = 'store.getList(%d)' % page
+        wd.execute_script(script)
+        print('%s : success for script execute [%s]' % (datetime.now(), script))
+        time.sleep(5)
+
+        # 실행결과HTML(rendering된 HTML) 가져오기
+        html = wd.page_source
+
+        # parsing with bs4
+        bs = BeautifulSoup(html, 'html.parser')
+        tag_tbody = bs.find('tbody', attrs={'id': 'store_list'})
+        tags_tr = tag_tbody.findAll('tr')
+
+        # 마지막 검출
+        if tags_tr[0].get('class') is None:
+            break
+
+        for tag_tr in tags_tr:
+            strings = list(tag_tr.strings)
+            name = strings[1]
+            address = strings[6]
+            sidogu = address.split()[:2]
+
+            results.append((name, address) + tuple(sidogu))
+
+    # store
+    table = pd.DataFrame(results, columns=['name', 'address', 'sido', 'gungu'])
+
+    table['sido'] = table.sido.apply(lambda v: sido_dict.get(v, v))
+    table['gungu'] = table.gungu.apply(lambda v: gungu_dict.get(v, v))
+
+    table.to_csv('{0}/goobne_table.csv'.format(RESULT_DIRECTORY), encoding='utf-8', mode='w', index=True)
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     # pelicana
     #crawling_pelicana()
@@ -119,4 +173,7 @@ if __name__ == '__main__':
         '''
 
     # kyochon
-    crawling_kyochon()
+    #crawling_kyochon()
+
+    # goobne
+    crawling_goobne()
